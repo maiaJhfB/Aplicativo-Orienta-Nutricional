@@ -22,6 +22,10 @@ namespace NutriAR.Models
         public float Fiber;
         public float Sugar;
         public float Sodium;
+        public float SaturatedFat;
+        public float GramsPerPortion;
+        public string Barcode;
+        public bool IsFromDatabase;
         public HealthAlertLevel AlertLevel;
         public string AlertTitle;
         public string AlertMessage;
@@ -41,7 +45,11 @@ namespace NutriAR.Models
             HealthAlertLevel alertLevel,
             string alertTitle,
             string alertMessage,
-            string guidance)
+            string guidance,
+            float saturatedFat = 0f,
+            float gramsPerPortion = 100f,
+            string barcode = "",
+            bool isFromDatabase = false)
         {
             Id = id;
             Name = name;
@@ -53,6 +61,10 @@ namespace NutriAR.Models
             Fiber = fiber;
             Sugar = sugar;
             Sodium = sodium;
+            SaturatedFat = saturatedFat;
+            GramsPerPortion = gramsPerPortion;
+            Barcode = barcode;
+            IsFromDatabase = isFromDatabase;
             AlertLevel = alertLevel;
             AlertTitle = alertTitle;
             AlertMessage = alertMessage;
@@ -60,4 +72,3 @@ namespace NutriAR.Models
         }
     }
 }
-

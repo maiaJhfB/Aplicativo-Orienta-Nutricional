@@ -21,7 +21,8 @@ namespace NutriAR.Services
                 HealthAlertLevel.Positive,
                 "Boa fonte de energia rápida",
                 "Tem fibras e potássio. O açúcar está naturalmente presente na fruta.",
-                "Combine com iogurte natural ou castanhas para acrescentar proteínas e gorduras boas.") ,
+                "Combine com iogurte natural ou castanhas para acrescentar proteínas e gorduras boas.",
+                gramsPerPortion: 118f) ,
             new NutritionProfile(
                 "refrigerante",
                 "Refrigerante cola",
@@ -36,7 +37,8 @@ namespace NutriAR.Services
                 HealthAlertLevel.High,
                 "Alto teor de açúcar",
                 "Esta porção contém cerca de 9 colheres de chá de açúcar e quase não oferece fibras.",
-                "Se puder, reduza a frequência ou alterne com água, água com gás ou bebida sem açúcar.") ,
+                "Se puder, reduza a frequência ou alterne com água, água com gás ou bebida sem açúcar.",
+                gramsPerPortion: 350f) ,
             new NutritionProfile(
                 "barra",
                 "Barra de cereal",
@@ -51,7 +53,8 @@ namespace NutriAR.Services
                 HealthAlertLevel.Attention,
                 "Observe a lista de ingredientes",
                 "Barras parecidas podem ter quantidades bem diferentes de açúcar e fibras.",
-                "Compare rótulos e prefira as opções com mais fibras e menos açúcares adicionados.") ,
+                "Compare rótulos e prefira as opções com mais fibras e menos açúcares adicionados.",
+                gramsPerPortion: 25f) ,
             new NutritionProfile(
                 "pao-queijo",
                 "Pão de queijo",
@@ -66,7 +69,8 @@ namespace NutriAR.Services
                 HealthAlertLevel.Attention,
                 "Atenção ao sódio e à porção",
                 "Duas unidades dobram a estimativa para 360 kcal e 640 mg de sódio.",
-                "Acompanhe com fruta e uma fonte de proteína para uma refeição mais completa.") ,
+                "Acompanhe com fruta e uma fonte de proteína para uma refeição mais completa.",
+                gramsPerPortion: 50f) ,
             new NutritionProfile(
                 "iogurte",
                 "Iogurte natural",
@@ -81,7 +85,8 @@ namespace NutriAR.Services
                 HealthAlertLevel.Positive,
                 "Opção com proteínas",
                 "O iogurte natural fornece proteína e cálcio, com pouco açúcar adicionado.",
-                "Acrescente fruta e aveia para aumentar fibras e variar o sabor.")
+                "Acrescente fruta e aveia para aumentar fibras e variar o sabor.",
+                gramsPerPortion: 170f)
         };
 
         public static IReadOnlyList<NutritionProfile> All => Items;
@@ -106,4 +111,3 @@ namespace NutriAR.Services
         }
     }
 }
-

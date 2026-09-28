@@ -1,4 +1,4 @@
-using System.Collections;
+using System.Globalization;
 using NutriAR.Models;
 using NutriAR.Services;
 using UnityEngine;
@@ -23,12 +23,13 @@ namespace NutriAR.UI
 
         private Font font;
         private Text resultName;
-        private Text resultPortion;
         private Text calories;
         private Text dailyReference;
         private Text carbValue;
         private Text proteinValue;
         private Text fatValue;
+        private Text portionValue;
+        private Text cameraStatus;
         private Image carbBar;
         private Image proteinBar;
         private Image fatBar;
@@ -37,11 +38,18 @@ namespace NutriAR.UI
         private Text alertMessage;
         private Text guidance;
         private Button scanButton;
+        private Button addToDayButton;
+        private InputField barcodeInput;
         private Text scanButtonLabel;
         private RectTransform scanLine;
         private GameObject scanningLabel;
-        private int nextProfileIndex;
+        private CameraFeedController cameraController;
+        private OpenFoodFactsClient foodFactsClient;
+        private NutritionProfile selectedProfile;
+        private float portionMultiplier = 1f;
+        private int consumedCalories;
         private bool scanning;
+        private float scanAnimationTime;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -61,8 +69,23 @@ namespace NutriAR.UI
             Application.targetFrameRate = 60;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            foodFactsClient = gameObject.AddComponent<OpenFoodFactsClient>();
+            LoadDailyCalories();
             BuildInterface();
             ShowResult(NutritionCatalog.GetAt(0));
+        }
+
+        private void Update()
+        {
+            if (!scanning || scanLine == null)
+            {
+                return;
+            }
+
+            scanAnimationTime += Time.unscaledDeltaTime;
+            var y = Mathf.Lerp(0.20f, 0.78f, Mathf.PingPong(scanAnimationTime * 0.8f, 1f));
+            scanLine.anchorMin = new Vector2(0.08f, y);
+            scanLine.anchorMax = new Vector2(0.92f, y + 0.02f);
         }
 
         private void BuildInterface()
@@ -136,8 +159,8 @@ namespace NutriAR.UI
             var modeText = CreateText("Mode Text", mode.transform, "ALIMENTO OU RÓTULO", 21, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
             Stretch(modeText.rectTransform, Vector2.zero, Vector2.one, new Vector2(12f, 0f), new Vector2(-12f, 0f));
 
-            var statusText = CreateText("Camera Status", cameraCard.transform, "Iniciando câmera...", 22, FontStyle.Normal, new Color(1f, 1f, 1f, 0.88f), TextAnchor.MiddleCenter);
-            SetRect(statusText.rectTransform, 0.05f, 0.035f, 0.95f, 0.12f);
+            cameraStatus = CreateText("Camera Status", cameraCard.transform, "Iniciando câmera...", 20, FontStyle.Normal, new Color(1f, 1f, 1f, 0.88f), TextAnchor.MiddleCenter);
+            SetRect(cameraStatus.rectTransform, 0.05f, 0.005f, 0.95f, 0.045f);
 
             var frame = CreateUIObject("Scan Frame", cameraCard.transform);
             SetRect(frame, 0.19f, 0.24f, 0.81f, 0.78f);
@@ -155,14 +178,20 @@ namespace NutriAR.UI
             Stretch(scanningText.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             scanningLabel.SetActive(false);
 
-            var cameraController = gameObject.AddComponent<CameraFeedController>();
-            cameraController.Initialize(preview, statusText);
+            cameraController = gameObject.AddComponent<CameraFeedController>();
+            cameraController.BarcodeDetected += OnBarcodeDetected;
+            cameraController.Initialize(preview, cameraStatus);
+
+            barcodeInput = CreateInputField("Manual Barcode", cameraCard.transform, "Digitar código EAN-13");
+            SetRect(barcodeInput.GetComponent<RectTransform>(), 0.05f, 0.055f, 0.64f, 0.13f);
+            var lookupButton = CreateButton("Lookup Barcode", cameraCard.transform, "BUSCAR", 18, Primary, Color.white, LookupManualBarcode);
+            SetRect(lookupButton.GetComponent<RectTransform>(), 0.68f, 0.055f, 0.95f, 0.13f);
         }
 
         private void BuildSampleButtons(RectTransform parent)
         {
-            var hint = CreateText("Examples Hint", parent, "TESTE RÁPIDO", 19, FontStyle.Bold, Muted, TextAnchor.MiddleLeft);
-            SetRect(hint.rectTransform, 0.05f, 0.473f, 0.28f, 0.502f);
+            var hint = CreateText("Examples Hint", parent, "SEM CÓDIGO? ESCOLHA UM EXEMPLO", 17, FontStyle.Bold, Muted, TextAnchor.MiddleLeft);
+            SetRect(hint.rectTransform, 0.05f, 0.473f, 0.95f, 0.502f);
 
             var labels = new[] { "Banana", "Refrigerante", "Barra", "Pão de queijo" };
             var ids = new[] { "banana", "refrigerante", "barra", "pao-queijo" };
@@ -171,14 +200,14 @@ namespace NutriAR.UI
                 var capturedId = ids[i];
                 var minX = 0.05f + i * 0.23f;
                 var button = CreateButton("Sample " + labels[i], parent, labels[i], 21, Surface, Ink, () => Scan(capturedId));
-                SetRect(button.GetComponent<RectTransform>(), minX, 0.437f, minX + 0.215f, 0.477f);
+                SetRect(button.GetComponent<RectTransform>(), minX, 0.429f, minX + 0.215f, 0.469f);
                 AddShadow(button.gameObject, new Color(0f, 0.1f, 0.07f, 0.09f), new Vector2(0f, -3f));
             }
         }
 
         private void BuildScanButton(RectTransform parent)
         {
-            scanButton = CreateButton("Scan Button", parent, "ESCANEAR AGORA", 30, Primary, Color.white, ScanNext);
+            scanButton = CreateButton("Scan Button", parent, "LER CÓDIGO EAN-13", 28, Primary, Color.white, ScanNext);
             SetRect(scanButton.GetComponent<RectTransform>(), 0.14f, 0.374f, 0.86f, 0.425f);
             AddShadow(scanButton.gameObject, new Color(0.02f, 0.35f, 0.22f, 0.28f), new Vector2(0f, -7f));
             scanButtonLabel = scanButton.GetComponentInChildren<Text>();
@@ -190,14 +219,19 @@ namespace NutriAR.UI
             SetRect(card.rectTransform, 0.045f, 0.075f, 0.955f, 0.352f);
             AddShadow(card.gameObject, new Color(0f, 0.12f, 0.08f, 0.13f), new Vector2(0f, -6f));
 
-            resultName = CreateText("Food Name", card.transform, "", 39, FontStyle.Bold, Ink, TextAnchor.MiddleLeft);
-            SetRect(resultName.rectTransform, 0.045f, 0.82f, 0.68f, 0.96f);
-            resultPortion = CreateText("Portion", card.transform, "", 22, FontStyle.Normal, Muted, TextAnchor.MiddleRight);
-            SetRect(resultPortion.rectTransform, 0.57f, 0.82f, 0.955f, 0.96f);
+            resultName = CreateText("Food Name", card.transform, "", 35, FontStyle.Bold, Ink, TextAnchor.MiddleLeft);
+            SetRect(resultName.rectTransform, 0.045f, 0.82f, 0.63f, 0.96f);
+
+            var minus = CreateButton("Decrease Portion", card.transform, "−", 26, new Color(0.90f, 0.95f, 0.92f), PrimaryDark, () => SetPortion(portionMultiplier - 0.5f));
+            SetRect(minus.GetComponent<RectTransform>(), 0.62f, 0.83f, 0.72f, 0.95f);
+            portionValue = CreateText("Portion", card.transform, "1 ×", 15, FontStyle.Bold, Muted, TextAnchor.MiddleCenter);
+            SetRect(portionValue.rectTransform, 0.72f, 0.82f, 0.94f, 0.96f);
+            var plus = CreateButton("Increase Portion", card.transform, "+", 26, new Color(0.90f, 0.95f, 0.92f), PrimaryDark, () => SetPortion(portionMultiplier + 0.5f));
+            SetRect(plus.GetComponent<RectTransform>(), 0.94f, 0.83f, 0.985f, 0.95f);
 
             calories = CreateText("Calories", card.transform, "", 64, FontStyle.Bold, PrimaryDark, TextAnchor.MiddleLeft);
             SetRect(calories.rectTransform, 0.045f, 0.53f, 0.40f, 0.81f);
-            dailyReference = CreateText("Daily Reference", card.transform, "", 20, FontStyle.Normal, Muted, TextAnchor.UpperLeft);
+            dailyReference = CreateText("Daily Reference", card.transform, "", 16, FontStyle.Normal, Muted, TextAnchor.UpperLeft);
             SetRect(dailyReference.rectTransform, 0.05f, 0.43f, 0.38f, 0.57f);
 
             CreateMacroRow(card.transform, "CARBOIDRATOS", CarbColor, 0.69f, out carbValue, out carbBar);
@@ -212,6 +246,9 @@ namespace NutriAR.UI
             SetRect(alertMessage.rectTransform, 0.035f, 0.36f, 0.965f, 0.72f);
             guidance = CreateText("Guidance", alertPanel.transform, "", 18, FontStyle.Italic, Muted, TextAnchor.UpperLeft);
             SetRect(guidance.rectTransform, 0.035f, 0.05f, 0.965f, 0.39f);
+
+            addToDayButton = CreateButton("Add To Today", card.transform, "ADICIONAR ESTA PORÇÃO AO DIA", 18, Primary, Color.white, AddSelectedToToday);
+            SetRect(addToDayButton.GetComponent<RectTransform>(), 0.12f, 0.005f, 0.88f, 0.05f);
         }
 
         private void BuildDisclaimer(RectTransform parent)
@@ -219,8 +256,8 @@ namespace NutriAR.UI
             var disclaimer = CreateText(
                 "Disclaimer",
                 parent,
-                "Estimativas educativas — não substituem rótulo, diagnóstico ou orientação profissional.",
-                18,
+                "Dados aproximados; confira o rótulo. 2.000 kcal é referência geral, não uma meta individual.",
+                16,
                 FontStyle.Normal,
                 Muted,
                 TextAnchor.MiddleCenter);
@@ -229,58 +266,167 @@ namespace NutriAR.UI
 
         private void ScanNext()
         {
-            var profile = NutritionCatalog.GetAt(nextProfileIndex);
-            nextProfileIndex = (nextProfileIndex + 1) % NutritionCatalog.All.Count;
-            StartCoroutine(ScanRoutine(profile));
+            if (scanning)
+            {
+                scanning = false;
+                cameraController.StopBarcodeScan();
+                scanLine.gameObject.SetActive(false);
+                scanningLabel.SetActive(false);
+                scanButtonLabel.text = "LER CÓDIGO EAN-13";
+                cameraController.SetStatus("Leitura pausada • centralize o código e tente novamente");
+                return;
+            }
+
+            if (!cameraController.IsCameraReady)
+            {
+                cameraController.SetStatus("A câmera ainda não está pronta • autorize o acesso ou digite o código");
+                return;
+            }
+
+            scanning = true;
+            scanAnimationTime = 0f;
+            scanButtonLabel.text = "CANCELAR LEITURA";
+            scanningLabel.SetActive(true);
+            scanLine.gameObject.SetActive(true);
+            cameraController.BeginBarcodeScan();
         }
 
         private void Scan(string id)
         {
-            StartCoroutine(ScanRoutine(NutritionCatalog.GetById(id)));
-        }
-
-        private IEnumerator ScanRoutine(NutritionProfile profile)
-        {
-            if (scanning)
-            {
-                yield break;
-            }
-
-            scanning = true;
-            scanButton.interactable = false;
-            scanButtonLabel.text = "ANALISANDO...";
-            scanningLabel.SetActive(true);
-            scanLine.gameObject.SetActive(true);
-
-            const float duration = 1.25f;
-            var elapsed = 0f;
-            while (elapsed < duration)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                var phase = Mathf.PingPong(elapsed * 1.45f, 1f);
-                var y = Mathf.Lerp(0.78f, 0.20f, phase);
-                scanLine.anchorMin = new Vector2(0.08f, y);
-                scanLine.anchorMax = new Vector2(0.92f, y + 0.02f);
-                yield return null;
-            }
-
-            ShowResult(profile);
+            scanning = false;
+            cameraController.StopBarcodeScan();
             scanLine.gameObject.SetActive(false);
             scanningLabel.SetActive(false);
-            scanButtonLabel.text = "ESCANEAR NOVAMENTE";
-            scanButton.interactable = true;
+            scanButtonLabel.text = "LER CÓDIGO EAN-13";
+            ShowResult(NutritionCatalog.GetById(id));
+            cameraController.SetStatus("Exemplo selecionado • use LER CÓDIGO para consultar um rótulo");
+        }
+
+        private void OnBarcodeDetected(string barcode)
+        {
             scanning = false;
+            cameraController.SetStatus("Código " + barcode + " lido • consultando informações nutricionais...");
+            scanButtonLabel.text = "LER OUTRO PRODUTO";
+            scanLine.gameObject.SetActive(false);
+            scanningLabel.SetActive(false);
+            foodFactsClient.Lookup(barcode, (profile, error) =>
+            {
+                if (profile != null)
+                {
+                    ShowResult(profile);
+                    cameraController.SetStatus("Produto encontrado • confira porção e dados antes de adicionar");
+                }
+                else
+                {
+                    cameraController.SetStatus(error ?? "Produto não encontrado • escolha um exemplo ou digite outro código");
+                }
+            });
+        }
+
+        private void LookupManualBarcode()
+        {
+            var barcode = barcodeInput.text == null ? "" : barcodeInput.text.Trim();
+            if (!RegexEAN13(barcode))
+            {
+                cameraController.SetStatus("Digite um código EAN-13 válido com 13 dígitos");
+                return;
+            }
+
+            scanning = false;
+            cameraController.StopBarcodeScan();
+            scanningLabel.SetActive(false);
+            scanLine.gameObject.SetActive(false);
+            scanButtonLabel.text = "LER CÓDIGO EAN-13";
+            cameraController.SetStatus("Consultando o produto " + barcode + "...");
+            foodFactsClient.Lookup(barcode, (profile, error) =>
+            {
+                if (profile != null)
+                {
+                    ShowResult(profile);
+                    cameraController.SetStatus("Produto encontrado • confira porção e dados antes de adicionar");
+                }
+                else
+                {
+                    cameraController.SetStatus(error ?? "Produto não encontrado");
+                }
+            });
+        }
+
+        private static bool RegexEAN13(string value)
+        {
+            return value != null && System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9]{13}$") && EAN13Decoder.HasValidChecksum(value);
+        }
+
+        private void SetPortion(float value)
+        {
+            portionMultiplier = Mathf.Clamp(value, 0.5f, 5f);
+            if (selectedProfile != null)
+            {
+                RefreshNutritionResult();
+            }
+        }
+
+        private void LoadDailyCalories()
+        {
+            var todayKey = "nutriar_day_" + System.DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+            consumedCalories = PlayerPrefs.GetInt(todayKey, 0);
+        }
+
+        private void AddSelectedToToday()
+        {
+            if (selectedProfile == null) return;
+            consumedCalories += Mathf.RoundToInt(selectedProfile.Calories * portionMultiplier);
+            var todayKey = "nutriar_day_" + System.DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+            PlayerPrefs.SetInt(todayKey, consumedCalories);
+            PlayerPrefs.Save();
+            RefreshNutritionResult();
+            cameraController.SetStatus("Porção adicionada • registro de hoje atualizado neste aparelho");
+        }
+
+        private void RefreshNutritionResult()
+        {
+            var scale = portionMultiplier;
+            calories.text = Mathf.RoundToInt(selectedProfile.Calories * scale) + " kcal";
+            portionValue.text = FormatPortion();
+            dailyReference.text = BuildDailyReferenceText();
+            carbValue.text = (selectedProfile.Carbohydrates * scale).ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " g";
+            proteinValue.text = (selectedProfile.Proteins * scale).ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " g";
+            fatValue.text = (selectedProfile.Fats * scale).ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " g";
+            carbBar.fillAmount = Mathf.Clamp01(selectedProfile.Carbohydrates * scale / 60f);
+            proteinBar.fillAmount = Mathf.Clamp01(selectedProfile.Proteins * scale / 25f);
+            fatBar.fillAmount = Mathf.Clamp01(selectedProfile.Fats * scale / 25f);
+            alertTitle.text = selectedProfile.AlertTitle;
+            alertMessage.text = selectedProfile.AlertMessage;
+            guidance.text = "Sugestão: " + selectedProfile.Guidance;
+
+            switch (selectedProfile.AlertLevel)
+            {
+                case HealthAlertLevel.High:
+                    alertPanel.color = new Color(0.91f, 0.27f, 0.20f, 0.13f);
+                    alertTitle.color = Hex("A7352E");
+                    break;
+                case HealthAlertLevel.Attention:
+                    alertPanel.color = new Color(0.95f, 0.60f, 0.10f, 0.15f);
+                    alertTitle.color = Hex("88570B");
+                    break;
+                default:
+                    alertPanel.color = new Color(0.05f, 0.54f, 0.36f, 0.10f);
+                    alertTitle.color = PrimaryDark;
+                    break;
+            }
         }
 
         private void ShowResult(NutritionProfile profile)
         {
+            selectedProfile = profile;
+            portionMultiplier = 1f;
             resultName.text = profile.Name;
-            resultPortion.text = profile.Portion;
             calories.text = profile.Calories + " kcal";
-            dailyReference.text = "≈ " + Mathf.RoundToInt(profile.Calories / 2000f * 100f) + "% de uma referência de 2.000 kcal";
-            carbValue.text = profile.Carbohydrates.ToString("0.#") + " g";
-            proteinValue.text = profile.Proteins.ToString("0.#") + " g";
-            fatValue.text = profile.Fats.ToString("0.#") + " g";
+            dailyReference.text = BuildDailyReferenceText();
+            carbValue.text = profile.Carbohydrates.ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " g";
+            proteinValue.text = profile.Proteins.ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " g";
+            fatValue.text = profile.Fats.ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " g";
+            portionValue.text = FormatPortion();
             carbBar.fillAmount = Mathf.Clamp01(profile.Carbohydrates / 60f);
             proteinBar.fillAmount = Mathf.Clamp01(profile.Proteins / 25f);
             fatBar.fillAmount = Mathf.Clamp01(profile.Fats / 25f);
@@ -303,6 +449,22 @@ namespace NutriAR.UI
                     alertTitle.color = PrimaryDark;
                     break;
             }
+        }
+
+        private string BuildDailyReferenceText()
+        {
+            if (consumedCalories > 2000)
+            {
+                return "Hoje " + consumedCalories + " kcal\n+" + (consumedCalories - 2000) + " vs ref. geral";
+            }
+
+            return "Hoje " + consumedCalories + " kcal\nref. geral 2.000";
+        }
+
+        private string FormatPortion()
+        {
+            var grams = selectedProfile == null ? 0f : selectedProfile.GramsPerPortion * portionMultiplier;
+            return portionMultiplier.ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " × · " + grams.ToString("0.#", CultureInfo.GetCultureInfo("pt-BR")) + " g";
         }
 
         private void CreateMacroRow(Transform parent, string label, Color color, float top, out Text value, out Image fill)
@@ -349,6 +511,24 @@ namespace NutriAR.UI
             var text = CreateText("Label", image.transform, label, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter);
             Stretch(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(12f, 4f), new Vector2(-12f, -4f));
             return button;
+        }
+
+        private InputField CreateInputField(string name, Transform parent, string placeholder)
+        {
+            var background = CreatePanel(name, parent, Surface, 16f);
+            var input = background.gameObject.AddComponent<InputField>();
+            input.contentType = InputField.ContentType.IntegerNumber;
+            input.characterLimit = 14;
+            input.lineType = InputField.LineType.SingleLine;
+            input.targetGraphic = background;
+
+            var text = CreateText("Input Text", background.transform, "", 19, FontStyle.Normal, Ink, TextAnchor.MiddleLeft);
+            Stretch(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(12f, 2f), new Vector2(-12f, -2f));
+            var hint = CreateText("Placeholder", background.transform, placeholder, 17, FontStyle.Italic, Muted, TextAnchor.MiddleLeft);
+            Stretch(hint.rectTransform, Vector2.zero, Vector2.one, new Vector2(12f, 2f), new Vector2(-12f, -2f));
+            input.textComponent = text;
+            input.placeholder = hint;
+            return input;
         }
 
         private Text CreateText(string name, Transform parent, string value, int size, FontStyle style, Color color, TextAnchor alignment)
@@ -509,4 +689,3 @@ namespace NutriAR.UI
         }
     }
 }
-

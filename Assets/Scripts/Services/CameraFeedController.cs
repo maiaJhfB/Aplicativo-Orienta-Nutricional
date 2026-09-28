@@ -1,4 +1,5 @@
 using System.Collections;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,6 +10,12 @@ namespace NutriAR.Services
         private RawImage preview;
         private Text status;
         private WebCamTexture cameraTexture;
+        private Color32[] pixelBuffer;
+        private bool barcodeScanning;
+        private float nextBarcodeAttempt;
+
+        public event Action<string> BarcodeDetected;
+        public bool IsCameraReady => cameraTexture != null && cameraTexture.isPlaying;
 
         public void Initialize(RawImage previewImage, Text statusText)
         {
@@ -62,6 +69,42 @@ namespace NutriAR.Services
             preview.rectTransform.localEulerAngles = new Vector3(0f, 0f, -cameraTexture.videoRotationAngle);
             var scaleY = cameraTexture.videoVerticallyMirrored ? -1f : 1f;
             preview.rectTransform.localScale = new Vector3(1f, scaleY, 1f);
+
+            if (barcodeScanning && Time.unscaledTime >= nextBarcodeAttempt && cameraTexture.width > 64 && cameraTexture.height > 64)
+            {
+                nextBarcodeAttempt = Time.unscaledTime + 0.18f;
+                var size = cameraTexture.width * cameraTexture.height;
+                if (pixelBuffer == null || pixelBuffer.Length != size)
+                {
+                    pixelBuffer = new Color32[size];
+                }
+
+                cameraTexture.GetPixels32(pixelBuffer);
+                if (EAN13Decoder.TryDecode(pixelBuffer, cameraTexture.width, cameraTexture.height, out var barcode))
+                {
+                    barcodeScanning = false;
+                    Handheld.Vibrate();
+                    BarcodeDetected?.Invoke(barcode);
+                }
+            }
+        }
+
+        public void BeginBarcodeScan()
+        {
+            if (cameraTexture == null || !cameraTexture.isPlaying)
+            {
+                SetStatus("Câmera indisponível • escolha um alimento de exemplo");
+                return;
+            }
+
+            barcodeScanning = true;
+            nextBarcodeAttempt = 0f;
+            SetStatus("Centralize o código de barras EAN‑13 no quadro");
+        }
+
+        public void StopBarcodeScan()
+        {
+            barcodeScanning = false;
         }
 
         private void OnDestroy()
@@ -70,9 +113,11 @@ namespace NutriAR.Services
             {
                 cameraTexture.Stop();
             }
+            barcodeScanning = false;
+            pixelBuffer = null;
         }
 
-        private void SetStatus(string message)
+        public void SetStatus(string message)
         {
             if (status != null)
             {
@@ -81,4 +126,3 @@ namespace NutriAR.Services
         }
     }
 }
-
