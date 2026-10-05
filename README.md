@@ -2,7 +2,6 @@
 
 NutriAR é um aplicativo de orientação nutricional que usa a câmera do celular para ler o código de barras de um produto e mostrar, na hora, quantas calorias e nutrientes aquela porção tem. A ideia nasceu de um problema bem comum: rótulos nutricionais são pequenos, cheios de números e difíceis de interpretar rápido, seja no mercado ou na mesa. O app tenta resolver isso traduzindo o rótulo em uma informação simples e visual.
 
-É um protótipo desenvolvido em **Unity 6000.0f1**, pensado primeiro para celular, em orientação vertical.
 
 ## Como funciona
 
