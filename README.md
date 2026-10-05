@@ -35,27 +35,5 @@ Quando o produto não é encontrado na base, a conexão falha ou faltam dados de
 - Registro diário de calorias, salvo localmente no aparelho.
 - Catálogo de exemplos rápidos (banana, refrigerante, barra de cereal, pão de queijo) para testar o app sem precisar escanear um produto de verdade.
 
-## Privacidade
 
-Todo o diário alimentar fica salvo **localmente**, no próprio celular. Nenhuma informação de consumo é enviada a um servidor — a única comunicação externa do app é a consulta de produtos ao Open Food Facts pelo código de barras.
 
-## Como rodar o projeto
-
-1. Instale o **Unity Hub** e, por ele, o **Unity 6000.0f1**, incluindo o módulo de build para Android.
-2. Clone este repositório e abra a pasta pelo Unity Hub.
-3. Para testar rápido, dê Play no próprio Editor — a webcam do computador funciona como câmera.
-4. Para instalar no celular: ative a depuração USB no Android, conecte o aparelho, mude a plataforma de build para Android em *File > Build Profiles* e use *Build And Run*.
-
-O app precisa de internet em uso, já que a consulta de produtos é feita em tempo real no Open Food Facts.
-
-## Limitações atuais e próximos passos
-
-Este é um protótipo, e alguns pontos da proposta original ainda não foram implementados:
-
-- **Leitura da tabela nutricional impressa (OCR):** hoje o app identifica o produto pelo código de barras, não lendo diretamente o texto da embalagem.
-- **Reconhecimento de alimentos sem embalagem:** existe só um catálogo de exemplos; o app ainda não reconhece um alimento a partir de uma foto.
-- **Realidade aumentada espacial:** a tela atual mostra a câmera com uma moldura de leitura; a ideia de ancorar cartões de informação no ambiente via AR Foundation é um próximo passo.
-
-## Créditos
-
-As informações nutricionais vêm do [Open Food Facts](https://world.openfoodfacts.org/), uma base de dados aberta e mantida por colaboração da comunidade. Antes de distribuir o app publicamente, vale revisar os [termos de uso da API](https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/).
