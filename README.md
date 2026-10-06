@@ -4,7 +4,7 @@ NutriAR é um aplicativo de orientação nutricional que usa a câmera do celula
 
 ## Demonstração
 
-![Demonstração do projeto](assets/demo.gif)
+![Demonstração do projeto](Assets/demo.gif)
 
 ## Como funciona
 
